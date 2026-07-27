@@ -111,14 +111,32 @@
         return out;
     }
 
-    /** Retailer numbers reported as selling a game within the sales window. */
+    /**
+     * Retailers that sold a game within the window, with the month each last
+     * did. Returns { has(retailerNumber), lastSold(retailerNumber) } — the date
+     * matters, because "sold it in April" and "sold it this month" are very
+     * different answers to "should I drive there".
+     */
     async function fetchCarriers(gameId) {
         const m = await getManifest();
         if (!m) return null;
         const meta = m.carriers && m.carriers[gameId];
         if (!meta) return null;
         try {
-            return new Set(await cachedFile(LS.carriers(gameId), `carriers/${gameId}.json`, meta.hash));
+            const data = await cachedFile(LS.carriers(gameId), `carriers/${gameId}.json`, meta.hash);
+
+            // Older bundles published a plain array of retailer numbers.
+            if (Array.isArray(data)) {
+                const set = new Set(data);
+                return { has: (r) => set.has(r), lastSold: () => null, size: set.size };
+            }
+            const months = data.months || [];
+            const map = data.r || {};
+            return {
+                has: (r) => Object.prototype.hasOwnProperty.call(map, r),
+                lastSold: (r) => months[map[r]] ?? null,
+                size: Object.keys(map).length
+            };
         } catch (e) {
             console.warn(`[RemoteData] carriers ${gameId} failed:`, e.message);
             return null;
@@ -170,6 +188,7 @@
                 lat: r.lat, lng: r.lng,
                 distanceNum: d,
                 carriesGame: carriers ? carriers.has(r.r) : false,
+                lastSold: carriers ? carriers.lastSold(r.r) : null,
                 retailerNumber: r.r
             });
         }

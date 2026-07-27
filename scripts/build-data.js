@@ -304,6 +304,15 @@ async function geocode(retailers) {
 
 // ------------------------------------------------------------- carriers
 
+/**
+ * Which retailers sold each game, and *when they last did*.
+ *
+ * The date is the point. A store appearing here means "sold this game at some
+ * point in the window", not "has it on the shelf" — the state publishes no
+ * real-time inventory anywhere, and the locator is retailer self-reported. A
+ * store listed with sales three months ago and none since has almost certainly
+ * run out, and the app can only show that if we keep the date.
+ */
 async function buildCarriers(games) {
     const since = windowStart();
     log(`carrier lists for ${games.length} games`);
@@ -311,14 +320,28 @@ async function buildCarriers(games) {
     for (const g of games) {
         try {
             const rows = await soda({
-                $select: 'retailer_number',
+                $select: 'retailer_number,max(month_end_date) as last_sold,sum(net_sales_amount) as net',
                 $where: `instant_game_number='${g.id}' AND month_end_date > '${since}'`,
                 $group: 'retailer_number', $limit: 50000
             });
-            out.set(g.id, rows.map((r) => r.retailer_number).filter(Boolean).sort());
+
+            // Months are interned so each retailer costs one small integer
+            // instead of a repeated date string.
+            const months = [];
+            const index = (ym) => {
+                let i = months.indexOf(ym);
+                if (i === -1) { months.push(ym); i = months.length - 1; }
+                return i;
+            };
+            const map = {};
+            for (const r of rows) {
+                if (!r.retailer_number || !r.last_sold) continue;
+                map[r.retailer_number] = index(String(r.last_sold).slice(0, 7));
+            }
+            out.set(g.id, { months, r: map });
         } catch (e) {
             log(`  game ${g.id}: ${e.message}`);
-            out.set(g.id, []);
+            out.set(g.id, { months: [], r: {} });
         }
     }
     return out;

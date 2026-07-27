@@ -2339,3 +2339,63 @@ body {
 .qs-value.data-fresh { color: var(--success, #22c55e); }
 .qs-value.data-stale { color: var(--warning, #f59e0b); font-weight: 700; }
 .qs-value.data-stale::after { content: ' \26A0'; }
+
+/* ============================================
+   MOBILE SECTION NAV + TAP-TARGET SIZING
+   The page runs ~38,000px tall on a phone, so a fixed nav to jump between
+   sections is the difference between usable and not. Hidden on desktop, where
+   everything is already visible without it.
+   ============================================ */
+.section-nav { display: none; }
+
+@media (max-width: 900px) {
+    .section-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        z-index: 900;
+        background: rgba(15, 23, 42, 0.97);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid rgba(148, 163, 184, 0.18);
+        /* Clear the iOS home indicator. */
+        padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    .section-nav a {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        min-height: 56px;              /* comfortably above the 44px minimum */
+        padding: 6px 2px;
+        color: var(--text-muted, #94a3b8);
+        text-decoration: none;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: .01em;
+        -webkit-tap-highlight-color: transparent;
+    }
+    .section-nav a i { font-size: 16px; }
+    .section-nav a.active { color: var(--primary-light, #fbbf24); }
+    .section-nav a.active i { transform: translateY(-1px); }
+
+    /* Keep the last section clear of the fixed bar. */
+    body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+
+    /* Touch targets: Apple HIG and Material both want >= 44px. The audit
+       found 78 controls under that. */
+    button, .btn-refresh, .btn-secondary, .btn-primary,
+    select, input[type="text"], input[type="search"], .game-actions a {
+        min-height: 44px;
+    }
+    .section-nav a { min-height: 56px; }   /* not shrunk by the rule above */
+
+    /* Long game names were being cut mid-word in the top-5 lists. */
+    .top-pick-name {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        line-height: 1.25;
+    }
+}

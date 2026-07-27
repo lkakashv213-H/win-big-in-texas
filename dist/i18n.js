@@ -110,6 +110,11 @@
             'filters.reset': 'Reset',
 
             'games.title': 'Available Scratch-Off Tickets',
+            'nav.tickets': 'Tickets',
+            'nav.filters': 'Filter',
+            'nav.nearMe': 'Near Me',
+            'nav.picks': 'Picks',
+            'nav.stats': 'Stats',
             'games.showing': 'Showing',
             'games.of': 'of',
             'games.games': 'games',
@@ -197,7 +202,9 @@
             'retailer.searchLocation': 'Search Location',
             'retailer.mapCenter': 'Map center',
             'retailer.defaultName': 'Lottery Retailer',
-            'retailer.carries': 'Carries this game',
+            'retailer.carries': 'Sold here recently',
+            'retailer.stockCaveat': 'Stores report which games they stock; nobody publishes live inventory, so a listed store can still be sold out. Call ahead for a long trip.',
+            'retailer.soldAsOf': 'Last sold here {when}',
             'retailer.general': 'General lottery',
             'retailer.generalFull': 'General lottery retailer',
             'retailer.noAddress': 'Address not available',
@@ -346,6 +353,11 @@
             'filters.reset': 'Restablecer',
 
             'games.title': 'Raspaditos disponibles',
+            'nav.tickets': 'Boletos',
+            'nav.filters': 'Filtrar',
+            'nav.nearMe': 'Cerca',
+            'nav.picks': 'Top 5',
+            'nav.stats': 'Datos',
             'games.showing': 'Mostrando',
             'games.of': 'de',
             'games.games': 'juegos',
@@ -430,7 +442,9 @@
             'retailer.searchLocation': 'Ubicación de búsqueda',
             'retailer.mapCenter': 'Centro del mapa',
             'retailer.defaultName': 'Punto de venta de lotería',
-            'retailer.carries': 'Tiene este juego',
+            'retailer.carries': 'Vendido aquí recientemente',
+            'retailer.stockCaveat': 'Las tiendas informan qué juegos tienen; nadie publica inventario en vivo, así que una tienda listada puede estar agotada. Llama antes de un viaje largo.',
+            'retailer.soldAsOf': 'Última venta aquí: {when}',
             'retailer.general': 'Lotería en general',
             'retailer.generalFull': 'Punto de venta de lotería en general',
             'retailer.noAddress': 'Dirección no disponible',
@@ -524,15 +538,6 @@
             app.applyFilters(); // re-renders the games grid
             app.updateLastRefreshTime();
 
-            // Restore JS-managed labels that applyStatic() reset
-            const btn = document.getElementById('toggleRefresh');
-            if (btn) {
-                btn.innerHTML = app.isRefreshing
-                    ? '<i class="fas fa-stop"></i> ' + t('refresh.stop')
-                    : '<i class="fas fa-play"></i> ' + t('refresh.start');
-            }
-            const rs = document.getElementById('refreshStatus');
-            if (rs) rs.textContent = app.isRefreshing ? t('refresh.on') : t('refresh.off');
             if (app.nearMeLocation) {
                 const s = document.getElementById('nearMeStatus');
                 if (s) s.textContent = app.nearMeLocation.lat.toFixed(4) + ', ' + app.nearMeLocation.lng.toFixed(4);

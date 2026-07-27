@@ -46,7 +46,7 @@
         </header>
 
         <!-- Main Dashboard Stats -->
-        <section class="dashboard">
+        <section class="dashboard" id="navDashboard">
             <h2><i class="fas fa-chart-line"></i> <span data-i18n="dash.title">Dashboard Statistics</span></h2>
             <div class="stats-grid">
                 <div class="stat-card highlight">
@@ -99,41 +99,20 @@
                 </div>
             </div>
 
-            <!-- Auto-Refresh Config -->
+            <!-- Manual refresh. Auto-refresh was removed: the underlying feeds
+                 update once or twice a day, so polling every few seconds only
+                 burned battery and bandwidth without ever showing new numbers. -->
             <div class="refresh-config">
-                <div class="refresh-status">
-                    <div class="refresh-indicator" id="refreshIndicator">
-                        <i class="fas fa-sync-alt"></i>
-                        <span id="refreshStatus" data-i18n="refresh.off">Auto-refresh: OFF</span>
-                    </div>
-                    <div class="next-refresh">
-                        <span data-i18n="refresh.nextUpdate">Next update in:</span> <span id="nextRefresh">--</span>
-                    </div>
-                </div>
                 <div class="refresh-controls">
-                    <label data-i18n="refresh.interval">Refresh Interval:</label>
-                    <select id="refreshInterval">
-                        <option value="5" data-i18n="refresh.sec5">5 seconds</option>
-                        <option value="10" selected data-i18n="refresh.sec10">10 seconds</option>
-                        <option value="30" data-i18n="refresh.sec30">30 seconds</option>
-                        <option value="60" data-i18n="refresh.min1">1 minute</option>
-                        <option value="300" data-i18n="refresh.min5">5 minutes</option>
-                    </select>
-                    <button id="toggleRefresh" class="btn-refresh">
-                        <i class="fas fa-play"></i> <span data-i18n="refresh.start">Start Auto-Refresh</span>
-                    </button>
                     <button id="manualRefresh" class="btn-secondary">
                         <i class="fas fa-sync"></i> <span data-i18n="refresh.now">Refresh Now</span>
                     </button>
                 </div>
             </div>
-
             <!-- TODAY'S TOP 5 PICKS -->
-            <div class="top-picks-section">
+            <div class="top-picks-section" id="navPicks">
                 <div class="top-picks-header">
                     <h3><i class="fas fa-crown"></i> <span data-i18n="picks.title">Today's Top 5 Picks</span></h3>
-                    <span class="live-badge" id="liveBadge">
-                        <i class="fas fa-circle"></i> <span data-i18n="picks.live">LIVE</span>
                     </span>
                 </div>
 
@@ -186,7 +165,7 @@
         </section>
 
         <!-- Near Me Section -->
-        <section class="near-me-section" id="nearMeSection">
+        <section class="near-me-section" id="navNearMe">
             <div class="near-me-header">
                 <h2><i class="fas fa-map-marker-alt"></i> <span data-i18n="nearme.title">Near Me Mode</span></h2>
                 <label class="toggle-switch">
@@ -227,7 +206,7 @@
         </section>
 
         <!-- Filters Section -->
-        <section class="filters-section">
+        <section class="filters-section" id="navFilters">
             <h2><i class="fas fa-filter"></i> <span data-i18n="filters.title">Filter & Sort Tickets</span></h2>
             <div class="filters-grid">
                 <div class="filter-group">
@@ -285,7 +264,7 @@
         </section>
 
         <!-- Games List -->
-        <section class="games-section">
+        <section class="games-section" id="navGames">
             <div class="games-header">
                 <h2><i class="fas fa-list"></i> <span data-i18n="games.title">Available Scratch-Off Tickets</span></h2>
                 <div class="games-header-right">
@@ -399,5 +378,15 @@
             });
         }
     </script>
+
+    <!-- Mobile section nav. The page is ~38,000px tall on a phone (about 46
+         screens), so jumping between sections beats scrolling to find them. -->
+    <nav class="section-nav" id="sectionNav" aria-label="Sections">
+      <a href="#navDashboard" data-target="navDashboard"><i class="fas fa-chart-line"></i><span data-i18n="nav.stats">Stats</span></a>
+      <a href="#navPicks" data-target="navPicks"><i class="fas fa-crown"></i><span data-i18n="nav.picks">Picks</span></a>
+      <a href="#navNearMe" data-target="navNearMe"><i class="fas fa-location-dot"></i><span data-i18n="nav.nearMe">Near Me</span></a>
+      <a href="#navFilters" data-target="navFilters"><i class="fas fa-filter"></i><span data-i18n="nav.filters">Filter</span></a>
+      <a href="#navGames" data-target="navGames"><i class="fas fa-ticket"></i><span data-i18n="nav.tickets">Tickets</span></a>
+    </nav>
 </body>
 </html>

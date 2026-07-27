@@ -38,14 +38,6 @@ class LotChanceApp {
                 ? `http://localhost:3000`
                 : '');
 
-        // Auto-refresh config - use config if available
-        this.refreshInterval = (typeof CONFIG !== 'undefined' && CONFIG.DEFAULT_REFRESH_INTERVAL)
-            ? CONFIG.DEFAULT_REFRESH_INTERVAL
-            : 10; // seconds
-        this.refreshTimer = null;
-        this.countdownTimer = null;
-        this.countdown = 0;
-        this.isRefreshing = false;
         this.lastRefreshTime = new Date();
         this.isLoading = false;
         this.lastError = null;
@@ -76,6 +68,7 @@ class LotChanceApp {
         this.bindEvents();
         this.restoreSavedLocation();
         this.populateCityList();   // fire and forget — autocomplete only
+        this.initSectionNav();
 
         // Seed with the newest offline data we have. The last successful live
         // fetch beats the bundled data.js, which is a build-time snapshot and
@@ -105,11 +98,6 @@ class LotChanceApp {
         this.renderGames();
         this.generateInsights();
         this.updateLastRefreshTime();
-
-        // Auto-start refresh if configured
-        if (typeof CONFIG !== 'undefined' && CONFIG.AUTO_START_REFRESH) {
-            this.startAutoRefresh();
-        }
     }
 
     showLoadingState() {
@@ -145,16 +133,7 @@ class LotChanceApp {
             document.getElementById(id).addEventListener('change', () => this.applyFilters());
         });
 
-        // Auto-refresh controls
-        document.getElementById('toggleRefresh').addEventListener('click', () => this.toggleAutoRefresh());
         document.getElementById('manualRefresh').addEventListener('click', () => this.manualRefresh());
-        document.getElementById('refreshInterval').addEventListener('change', (e) => {
-            this.refreshInterval = parseInt(e.target.value);
-            if (this.isRefreshing) {
-                this.stopAutoRefresh();
-                this.startAutoRefresh();
-            }
-        });
 
         // Modals
         document.getElementById('closeModal').addEventListener('click', () => this.closeGameModal());
@@ -296,85 +275,18 @@ class LotChanceApp {
         }
     }
 
-    // ========================================
-    // AUTO-REFRESH SYSTEM
-    // ========================================
-    toggleAutoRefresh() {
-        if (this.isRefreshing) {
-            this.stopAutoRefresh();
-        } else {
-            this.startAutoRefresh();
-        }
-    }
-
-    startAutoRefresh() {
-        this.isRefreshing = true;
-        this.countdown = this.refreshInterval;
-
-        // Update UI
-        const btn = document.getElementById('toggleRefresh');
-        btn.innerHTML = '<i class="fas fa-stop"></i> ' + t('refresh.stop');
-        btn.classList.add('active');
-
-        document.getElementById('refreshIndicator').classList.add('active');
-        document.getElementById('refreshStatus').textContent = t('refresh.on');
-        document.getElementById('liveBadge').classList.add('active');
-
-        // Start countdown
-        this.updateCountdown();
-        this.countdownTimer = setInterval(() => {
-            this.countdown--;
-            this.updateCountdown();
-
-            if (this.countdown <= 0) {
-                this.refreshData();
-                this.countdown = this.refreshInterval;
-            }
-        }, 1000);
-    }
-
-    stopAutoRefresh() {
-        this.isRefreshing = false;
-
-        // Clear timers
-        if (this.countdownTimer) {
-            clearInterval(this.countdownTimer);
-            this.countdownTimer = null;
-        }
-
-        // Update UI
-        const btn = document.getElementById('toggleRefresh');
-        btn.innerHTML = '<i class="fas fa-play"></i> ' + t('refresh.start');
-        btn.classList.remove('active');
-
-        document.getElementById('refreshIndicator').classList.remove('active');
-        document.getElementById('refreshStatus').textContent = t('refresh.off');
-        document.getElementById('nextRefresh').textContent = '--';
-        document.getElementById('liveBadge').classList.remove('active');
-    }
-
-    updateCountdown() {
-        const mins = Math.floor(this.countdown / 60);
-        const secs = this.countdown % 60;
-        document.getElementById('nextRefresh').textContent =
-            mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`;
-    }
-
     manualRefresh() {
         this.refreshData();
-        if (this.isRefreshing) {
-            this.countdown = this.refreshInterval;
-        }
     }
 
     async refreshData() {
         // Fetch real data from API
-        const indicator = document.getElementById('refreshIndicator');
-        indicator.classList.add('fetching');
+        const btn = document.getElementById('manualRefresh');
+        if (btn) btn.classList.add('fetching');
 
         const success = await this.fetchFromAPI();
 
-        indicator.classList.remove('fetching');
+        if (btn) btn.classList.remove('fetching');
 
         if (success) {
             this.filteredGames = [...this.games];
@@ -2183,6 +2095,54 @@ class LotChanceApp {
         } catch { /* quota or private mode — non-fatal */ }
     }
 
+    /**
+     * Fixed bottom nav for phones: tap to jump to a section, and the current
+     * section stays highlighted while scrolling. The page is ~38,000px tall on
+     * a phone, so without this the only way to reach the ticket list is to
+     * scroll past everything else.
+     */
+    initSectionNav() {
+        const nav = document.getElementById('sectionNav');
+        if (!nav) return;
+        const links = [...nav.querySelectorAll('a')];
+
+        for (const link of links) {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = document.getElementById(link.dataset.target);
+                if (!target) return;
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+
+        // Highlight whichever section currently occupies the upper viewport.
+        const targets = links
+            .map(l => ({ link: l, el: document.getElementById(l.dataset.target) }))
+            .filter(x => x.el);
+        if (!targets.length || typeof IntersectionObserver === 'undefined') return;
+
+        const visible = new Map();
+        const observer = new IntersectionObserver((entries) => {
+            for (const entry of entries) visible.set(entry.target, entry.intersectionRatio);
+            let best = null, bestRatio = 0;
+            for (const { link, el } of targets) {
+                const ratio = visible.get(el) || 0;
+                if (ratio > bestRatio) { bestRatio = ratio; best = link; }
+            }
+            if (best) links.forEach(l => l.classList.toggle('active', l === best));
+        }, { threshold: [0, 0.15, 0.4, 0.75], rootMargin: '-10% 0px -60% 0px' });
+
+        targets.forEach(({ el }) => observer.observe(el));
+    }
+
+    /** "Jul 2026" from the bundle's "2026-07" month key. */
+    formatSaleMonth(ym) {
+        const m = /^(\d{4})-(\d{2})$/.exec(ym || '');
+        if (!m) return ym || '';
+        const d = new Date(Date.UTC(+m[1], +m[2] - 1, 1));
+        return d.toLocaleDateString([], { month: 'short', year: 'numeric', timeZone: 'UTC' });
+    }
+
     /** "3 hours ago" / "2 days ago", for telling the user how stale data is. */
     describeAge(ts) {
         const mins = Math.max(1, Math.round((Date.now() - ts) / 60000));
@@ -2430,7 +2390,8 @@ class LotChanceApp {
                 ${carrierCount > 0 ? `&middot; <span style="color:#22c55e; font-weight:700;">${t('retailer.nConfirmed', { n: carrierCount })}</span>` : ''}
             </div>
             <div style="padding: 6px 12px; margin-bottom: 12px; font-size: 11px; color: var(--text-muted); line-height: 1.4;">
-                <i class="fas fa-info-circle"></i> ${t('retailer.nameNote')}
+                <i class="fas fa-triangle-exclamation"></i> ${t('retailer.stockCaveat')}
+                <br><i class="fas fa-info-circle"></i> ${t('retailer.nameNote')}
                 ${this._bundleGeneratedAt ? `<br><i class="fas fa-clock"></i> ${t('retailer.dataAsOf', {
                     when: this._bundleGeneratedAt.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                     age: this.describeAge(this._bundleGeneratedAt.getTime())
@@ -2449,8 +2410,15 @@ class LotChanceApp {
                 ? `https://www.google.com/maps/dir/?api=1&destination=${r.lat},${r.lng}`
                 : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(fullAddress)}`;
 
+            // Deliberately not a present-tense stock claim. Nothing the state
+            // publishes tracks live inventory — the locator is retailer
+            // self-reported and the sales feed is monthly — so the honest
+            // statement is when the game was last sold there, not that it is
+            // on the shelf now.
             const badge = r.carriesGame
-                ? `<span class="retailer-badge carries"><i class="fas fa-check-circle"></i> ${t('retailer.carries')}</span>`
+                ? `<span class="retailer-badge carries"><i class="fas fa-check-circle"></i> ${
+                    r.lastSold ? t('retailer.soldAsOf', { when: this.formatSaleMonth(r.lastSold) })
+                               : t('retailer.carries')}</span>`
                 : `<span class="retailer-badge general"><i class="fas fa-store"></i> ${t('retailer.general')}</span>`;
 
             return `
