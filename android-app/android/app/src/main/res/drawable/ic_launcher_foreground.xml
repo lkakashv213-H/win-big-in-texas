@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Texas "Lone Star" — a single white five-pointed star centered in the
+     adaptive-icon safe zone (108x108 viewport, content within ~18..90). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportHeight="108"
+    android:viewportWidth="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 L61.99,43.0 L86.34,43.49 L66.93,58.2 L73.98,81.51 L54,67.6 L34.02,81.51 L41.07,58.2 L21.66,43.49 L46.01,43.0 Z" />
+</vector>

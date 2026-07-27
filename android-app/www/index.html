@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Texas Lottery scratch-off analyzer — adjusted odds, top picks, and retailer locator.">
+    <meta name="theme-color" content="#b91c1c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Win Big">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Win Big in Texas — Scratch-Off Analyzer</title>
+
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-ticket-alt"></i>
+                    <span>Win Big in Texas</span>
+                </div>
+                <div class="header-subtitle" data-i18n="header.subtitle">Texas Scratch-Off Analyzer</div>
+            </div>
+            <div class="location-selector">
+                <button id="langSwitcher" class="lang-switcher" title="Language / Idioma"><i class="fas fa-globe"></i> <span id="langCurrent">EN</span></button>
+                <i class="fas fa-map-marker-alt"></i>
+                <input type="text" id="locationInput" data-i18n-placeholder="header.locationPlaceholder" placeholder="Enter City or ZIP Code">
+                <button id="setLocationBtn" class="btn-primary">
+                    <i class="fas fa-search"></i> <span data-i18n="header.setLocation">Set Location</span>
+                </button>
+                <span id="currentLocation" class="current-location"></span>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Stats -->
+        <section class="dashboard">
+            <h2><i class="fas fa-chart-line"></i> <span data-i18n="dash.title">Dashboard Statistics</span></h2>
+            <div class="stats-grid">
+                <div class="stat-card highlight">
+                    <div class="stat-icon"><i class="fas fa-trophy"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="totalGames">0</span>
+                        <span class="stat-label" data-i18n="dash.activeGames">Active Games</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-dollar-sign"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="totalJackpots">$0</span>
+                        <span class="stat-label" data-i18n="dash.totalTopPrizes">Total Top Prizes Available</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-star"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="bestOdds">0</span>
+                        <span class="stat-label" data-i18n="dash.bestOdds">Best Overall Odds</span>
+                    </div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="jackpotsClaimed">0</span>
+                        <span class="stat-label" data-i18n="dash.topPrizesWon">Top Prizes Already Won</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats Row -->
+            <div class="quick-stats">
+                <div class="quick-stat">
+                    <span class="qs-label" data-i18n="dash.highestJackpot">Highest Jackpot:</span>
+                    <span class="qs-value" id="highestJackpot">$20,000,000</span>
+                </div>
+                <div class="quick-stat">
+                    <span class="qs-label" data-i18n="dash.priceRange">Price Range:</span>
+                    <span class="qs-value">$1 - $100</span>
+                </div>
+                <div class="quick-stat">
+                    <span class="qs-label" data-i18n="dash.bestValue">Best Value Pick:</span>
+                    <span class="qs-value" id="bestValue">Loading...</span>
+                </div>
+                <div class="quick-stat">
+                    <span class="qs-label" data-i18n="dash.dataUpdated">Data Updated:</span>
+                    <span class="qs-value" id="lastUpdate">Jan 12, 2026</span>
+                </div>
+            </div>
+
+            <!-- Auto-Refresh Config -->
+            <div class="refresh-config">
+                <div class="refresh-status">
+                    <div class="refresh-indicator" id="refreshIndicator">
+                        <i class="fas fa-sync-alt"></i>
+                        <span id="refreshStatus" data-i18n="refresh.off">Auto-refresh: OFF</span>
+                    </div>
+                    <div class="next-refresh">
+                        <span data-i18n="refresh.nextUpdate">Next update in:</span> <span id="nextRefresh">--</span>
+                    </div>
+                </div>
+                <div class="refresh-controls">
+                    <label data-i18n="refresh.interval">Refresh Interval:</label>
+                    <select id="refreshInterval">
+                        <option value="5" data-i18n="refresh.sec5">5 seconds</option>
+                        <option value="10" selected data-i18n="refresh.sec10">10 seconds</option>
+                        <option value="30" data-i18n="refresh.sec30">30 seconds</option>
+                        <option value="60" data-i18n="refresh.min1">1 minute</option>
+                        <option value="300" data-i18n="refresh.min5">5 minutes</option>
+                    </select>
+                    <button id="toggleRefresh" class="btn-refresh">
+                        <i class="fas fa-play"></i> <span data-i18n="refresh.start">Start Auto-Refresh</span>
+                    </button>
+                    <button id="manualRefresh" class="btn-secondary">
+                        <i class="fas fa-sync"></i> <span data-i18n="refresh.now">Refresh Now</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- TODAY'S TOP 5 PICKS -->
+            <div class="top-picks-section">
+                <div class="top-picks-header">
+                    <h3><i class="fas fa-crown"></i> <span data-i18n="picks.title">Today's Top 5 Picks</span></h3>
+                    <span class="live-badge" id="liveBadge">
+                        <i class="fas fa-circle"></i> <span data-i18n="picks.live">LIVE</span>
+                    </span>
+                </div>
+
+                <div class="top-picks-grid">
+                    <!-- Top 5 by Jackpot + Chance -->
+                    <div class="top-pick-card jackpot-chance">
+                        <div class="top-pick-header">
+                            <i class="fas fa-trophy"></i>
+                            <h4 data-i18n="picks.jackpotOdds">Best Jackpot + Odds</h4>
+                            <span class="top-pick-subtitle" data-i18n="picks.jackpotOddsSub">Highest prizes with best chances</span>
+                        </div>
+                        <div class="top-pick-list" id="topJackpotChance">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Top 5 by Overall Winning Chance -->
+                    <div class="top-pick-card overall-odds">
+                        <div class="top-pick-header">
+                            <i class="fas fa-dice"></i>
+                            <h4 data-i18n="picks.winningOdds">Best Winning Odds</h4>
+                            <span class="top-pick-subtitle" data-i18n="picks.winningOddsSub">Easiest to win any prize</span>
+                        </div>
+                        <div class="top-pick-list" id="topOverallOdds">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Top 5 by Budget Value -->
+                    <div class="top-pick-card budget-value">
+                        <div class="top-pick-header">
+                            <i class="fas fa-piggy-bank"></i>
+                            <h4 data-i18n="picks.budget">Best Budget Value</h4>
+                            <span class="top-pick-subtitle" data-i18n="picks.budgetSub">Best return for your money</span>
+                        </div>
+                        <div class="top-pick-list" id="topBudgetValue">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Insights Panel -->
+            <div class="insights-panel">
+                <h3><i class="fas fa-lightbulb"></i> <span data-i18n="insights.title">Smart Insights</span></h3>
+                <div class="insights-grid" id="insightsGrid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Near Me Section -->
+        <section class="near-me-section" id="nearMeSection">
+            <div class="near-me-header">
+                <h2><i class="fas fa-map-marker-alt"></i> <span data-i18n="nearme.title">Near Me Mode</span></h2>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="nearMeToggle">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="nearMeLabel">OFF</span>
+                </label>
+            </div>
+            <div class="near-me-body" id="nearMeBody">
+                <div class="near-me-controls">
+                    <div class="near-me-location">
+                        <button id="nearMeDetect" class="btn-primary">
+                            <i class="fas fa-crosshairs"></i> <span data-i18n="nearme.detect">Detect My Location</span>
+                        </button>
+                        <span class="near-me-status" id="nearMeStatus" data-i18n="nearme.noLocation">No location set</span>
+                    </div>
+                    <div class="near-me-radius">
+                        <label for="radiusSlider">
+                            <span data-i18n="nearme.radiusLabel">Search Radius:</span> <strong id="radiusValue">10</strong> <span data-i18n="nearme.miles">miles</span>
+                        </label>
+                        <input type="range" id="radiusSlider" min="1" max="50" value="10" step="1">
+                        <div class="radius-labels">
+                            <span>1 mi</span>
+                            <span>25 mi</span>
+                            <span>50 mi</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="near-me-info" id="nearMeInfo">
+                    <i class="fas fa-info-circle"></i>
+                    <span data-i18n="nearme.info">Enable Near Me mode to find lottery retailers within your chosen radius. All scratch-off games are available at any Texas Lottery retailer.</span>
+                </div>
+                <div class="near-me-results" id="nearMeResults" style="display:none;">
+                    <div class="near-me-retailers-summary" id="nearMeRetailersSummary"></div>
+                    <div class="near-me-retailers-list" id="nearMeRetailersList"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filters Section -->
+        <section class="filters-section">
+            <h2><i class="fas fa-filter"></i> <span data-i18n="filters.title">Filter & Sort Tickets</span></h2>
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label data-i18n="filters.priceRange">Price Range</label>
+                    <select id="priceFilter">
+                        <option value="all" data-i18n="filters.allPrices">All Prices</option>
+                        <option value="1">$1</option>
+                        <option value="2">$2</option>
+                        <option value="3">$3</option>
+                        <option value="5">$5</option>
+                        <option value="10">$10</option>
+                        <option value="20">$20</option>
+                        <option value="30">$30</option>
+                        <option value="50">$50</option>
+                        <option value="100">$100</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label data-i18n="filters.sortBy">Sort By</label>
+                    <select id="sortBy">
+                        <option value="adjustedOdds" data-i18n="filters.sortAdjusted">Best Adjusted Odds</option>
+                        <option value="overallOdds" data-i18n="filters.sortOverall">Best Overall Odds</option>
+                        <option value="jackpot" data-i18n="filters.sortJackpot">Highest Jackpot</option>
+                        <option value="price" data-i18n="filters.sortPriceAsc">Price (Low to High)</option>
+                        <option value="priceDesc" data-i18n="filters.sortPriceDesc">Price (High to Low)</option>
+                        <option value="remaining" data-i18n="filters.sortRemaining">Most Jackpots Remaining</option>
+                        <option value="value" data-i18n="filters.sortValue">Best Value Score</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label data-i18n="filters.jackpotStatus">Jackpot Status</label>
+                    <select id="jackpotFilter">
+                        <option value="all" data-i18n="filters.allGames">All Games</option>
+                        <option value="available" data-i18n="filters.hasJackpots">Has Jackpots Left</option>
+                        <option value="mostLeft" data-i18n="filters.most50">50%+ Jackpots Left</option>
+                        <option value="allLeft" data-i18n="filters.allJackpots">All Jackpots Available</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label data-i18n="filters.gameType">Game Type</label>
+                    <select id="typeFilter">
+                        <option value="all" data-i18n="filters.allTypes">All Types</option>
+                        <option value="multiplier" data-i18n="filters.multiplier">Multiplier Games</option>
+                        <option value="crossword" data-i18n="filters.crossword">Crossword/Word Games</option>
+                        <option value="loteria" data-i18n="filters.loteria">Loteria</option>
+                        <option value="bingo" data-i18n="filters.bingo">Bingo</option>
+                        <option value="themed" data-i18n="filters.themed">Themed (Sports, Movies)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button id="applyFilters" class="btn-primary"><i class="fas fa-check"></i> <span data-i18n="filters.apply">Apply Filters</span></button>
+                <button id="resetFilters" class="btn-secondary"><i class="fas fa-redo"></i> <span data-i18n="filters.reset">Reset</span></button>
+            </div>
+        </section>
+
+        <!-- Games List -->
+        <section class="games-section">
+            <div class="games-header">
+                <h2><i class="fas fa-list"></i> <span data-i18n="games.title">Available Scratch-Off Tickets</span></h2>
+                <div class="games-header-right">
+                    <div class="near-me-active-badge" id="nearMeActiveBadge" style="display:none;">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span id="nearMeBadgeText">Within 10 mi</span>
+                    </div>
+                    <div class="games-count"><span data-i18n="games.showing">Showing</span> <span id="gamesShown">0</span> <span data-i18n="games.of">of</span> <span id="gamesTotal">0</span> <span data-i18n="games.games">games</span></div>
+                </div>
+            </div>
+            <div class="insight-filter-banner" id="insightFilterBanner" style="display:none;">
+                <i class="fas fa-filter"></i>
+                <span id="insightFilterText"></span>
+                <button id="clearInsightFilter" class="btn-clear-filter">
+                    <i class="fas fa-times"></i> <span data-i18n="games.clearFilter">Clear Filter</span>
+                </button>
+            </div>
+            <div class="games-grid" id="gamesGrid">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+
+        <!-- Selected Game Detail Modal -->
+        <div class="modal-overlay" id="gameModal">
+            <div class="modal-content">
+                <button class="modal-close" id="closeModal"><i class="fas fa-times"></i></button>
+                <div id="modalContent">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Retailer Locator Modal with Map -->
+        <div class="modal-overlay" id="retailerModal">
+            <div class="modal-content wide">
+                <button class="modal-close" id="closeRetailerModal"><i class="fas fa-times"></i></button>
+                <div class="retailer-content">
+                    <h2><i class="fas fa-map-marked-alt"></i> <span data-i18n="retailer.title">Find Nearby Retailers</span></h2>
+                    <p class="retailer-subtitle"><span data-i18n="retailer.findWhereToBuy">Find where to buy</span> "<span id="selectedGameName"></span>"</p>
+
+                    <div class="retailer-search">
+                        <div class="search-inputs">
+                            <button id="useMyLocation" class="btn-primary">
+                                <i class="fas fa-crosshairs"></i> <span data-i18n="retailer.useMyLocation">Use My Location</span>
+                            </button>
+                            <span data-i18n="retailer.or">or</span>
+                            <input type="text" id="retailerZip" data-i18n-placeholder="retailer.zipPlaceholder" placeholder="Enter ZIP Code">
+                            <input type="text" id="retailerCity" data-i18n-placeholder="retailer.cityPlaceholder" placeholder="Enter City (e.g. Houston)" list="txCityList" autocomplete="off">
+                            <datalist id="txCityList"></datalist>
+                        </div>
+                        <button id="searchRetailers" class="btn-secondary">
+                            <i class="fas fa-search"></i> <span data-i18n="retailer.search">Search</span>
+                        </button>
+                    </div>
+
+                    <!-- Interactive Map -->
+                    <div class="map-container">
+                        <div id="retailerMap"></div>
+                        <div class="map-loading" id="mapLoading">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span data-i18n="retailer.loadingMap">Loading map...</span>
+                        </div>
+                    </div>
+
+                    <!-- Retailer List -->
+                    <div class="retailer-list-container">
+                        <h4><i class="fas fa-list"></i> <span data-i18n="retailer.nearbyList">Nearby Lottery Retailers</span></h4>
+                        <div class="retailer-list" id="retailerList">
+                            <p class="no-retailers" data-i18n="retailer.usePrompt">Use your location or search to find nearby retailers</p>
+                        </div>
+                    </div>
+
+                    <div class="retailer-tips">
+                        <h4><i class="fas fa-info-circle"></i> <span data-i18n="retailer.tips">Tips</span></h4>
+                        <ul>
+                            <li data-i18n="retailer.tip1">Click a marker on the map to see retailer details</li>
+                            <li data-i18n="retailer.tip2">Not all retailers carry every scratch-off game</li>
+                            <li data-i18n="retailer.tip3">Call ahead to confirm specific ticket availability</li>
+                        </ul>
+                        <div class="external-links">
+                            <a href="https://www.texaslottery.com/opencms/Games/Scratch_Offs/Retailer_Locator.jsp"
+                               target="_blank" class="btn-secondary">
+                                <i class="fas fa-external-link-alt"></i> <span data-i18n="retailer.official">Official TX Lottery Locator</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p><i class="fas fa-exclamation-circle"></i> <span data-i18n="footer.line1">This app is for informational purposes only. Play responsibly.</span></p>
+                <p><span data-i18n="footer.line2">Data sourced from Texas Lottery. Must be 18+ to play.</span> <a href="https://www.texaslottery.com" target="_blank">texaslottery.com</a></p>
+                <p class="disclaimer" data-i18n="footer.disclaimer">Odds shown are calculated estimates. Actual odds may vary. Always check official sources.</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="native-fetch.js"></script>
+    <script src="config.js"></script>
+    <script src="data.js"></script>
+    <script src="scraper.js"></script>
+    <script src="remote-data.js"></script>
+    <script src="i18n.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

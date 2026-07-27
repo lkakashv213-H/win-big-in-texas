@@ -1,0 +1,65 @@
+name: Update lottery data
+
+# Twice a day. The Texas Lottery refreshes the scratch-off CSV daily and the
+# open-data sales feed monthly, so two runs is plenty — and it keeps every app
+# user off texaslottery.com and data.texas.gov entirely.
+on:
+  schedule:
+    - cron: '17 9 * * *'    # 09:17 UTC ≈ 03:17 America/Chicago
+    - cron: '17 21 * * *'   # 21:17 UTC ≈ 15:17 America/Chicago
+  workflow_dispatch:         # manual "Run workflow" button
+
+# Least privilege: the job only needs to push the regenerated data.
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No dependencies: the builder uses only Node's built-in fetch.
+      - name: Build data bundle
+        env:
+          # Optional. Anonymous Socrata calls share a throttled pool; a free
+          # app token raises the limit. Add it as a repo secret to use it.
+          SOCRATA_APP_TOKEN: ${{ secrets.SOCRATA_APP_TOKEN }}
+        run: node scripts/build-data.js
+
+      - name: Sanity-check output
+        run: |
+          set -e
+          test -s public-data/manifest.json
+          node -e "
+            const m = require('./public-data/manifest.json');
+            const games = m.counts.games, tailers = m.counts.retailers;
+            if (games < 20) throw new Error('only ' + games + ' games — refusing to publish');
+            if (tailers < 5000) throw new Error('only ' + tailers + ' retailers — refusing to publish');
+            console.log('ok:', games, 'games,', tailers, 'retailers,', m.counts.retailersGeocoded, 'geocoded');
+          "
+
+      - name: Commit if changed
+        run: |
+          git config user.name  'lotchance-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add public-data
+          # manifest.json always differs (it carries a timestamp), so decide
+          # using the real payload files instead of "did anything change".
+          if git diff --cached --quiet -- public-data/games.json public-data/retailers public-data/carriers; then
+            echo 'No data changes — skipping commit.'
+            git reset
+          else
+            git commit -m "data: refresh $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi

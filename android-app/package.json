@@ -1,0 +1,20 @@
+{
+  "name": "win-big-in-texas",
+  "version": "1.0.0",
+  "description": "Win Big in Texas — Texas Lottery scratch-off analyzer (Android APK)",
+  "private": true,
+  "scripts": {
+    "init:android": "cap add android && cap sync android",
+    "sync": "cap sync android",
+    "open": "cap open android",
+    "build:debug": "cap sync android && cd android && (gradlew.bat assembleDebug || ./gradlew assembleDebug)",
+    "build:release": "cap sync android && cd android && (gradlew.bat assembleRelease || ./gradlew assembleRelease)"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

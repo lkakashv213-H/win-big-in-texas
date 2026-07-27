@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Win Big in Texas">
+  <defs>
+    <linearGradient id="star" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef3c7"/>
+      <stop offset="45%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
+      <feOffset dx="0" dy="6" result="offsetblur"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Lone Star, full bleed, transparent background -->
+  <g filter="url(#shadow)">
+    <polygon points="256,40 314,212 496,212 349,318 405,492 256,386 107,492 163,318 16,212 198,212"
+             fill="url(#star)"
+             stroke="#7c2d12"
+             stroke-width="6"
+             stroke-linejoin="round"/>
+  </g>
+
+  <!-- Inner highlight outline -->
+  <polygon points="256,96 304,238 432,238 328,316 367,448 256,368 145,448 184,316 80,238 208,238"
+           fill="none"
+           stroke="#fff7ed"
+           stroke-width="2"
+           stroke-linejoin="round"
+           opacity="0.45"/>
+
+  <!-- Center dollar -->
+  <text x="256" y="320"
+        font-family="Inter, 'Helvetica Neue', Arial, sans-serif"
+        font-size="180"
+        font-weight="900"
+        text-anchor="middle"
+        fill="#7c2d12">$</text>
+</svg>

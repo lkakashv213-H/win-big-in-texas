@@ -1,0 +1,52 @@
+# LotChance — pure-static deploy
+# No serverless functions. Netlify is used only as a same-origin CORS pipe
+# so the phone's browser can fetch texaslottery.com (which doesn't send CORS
+# headers). All parsing and scraping logic runs client-side in scraper.js.
+
+[build]
+  publish = "."
+
+# Texas Lottery scratch-off CSV (live prize-remaining counts)
+[[redirects]]
+  from = "/proxy/csv"
+  to = "https://www.texaslottery.com/export/sites/lottery/Games/Scratch_Offs/scratchoff.csv"
+  status = 200
+  force = true
+
+# All-games HTML index (used to discover detail page URLs)
+[[redirects]]
+  from = "/proxy/all"
+  to = "https://www.texaslottery.com/export/sites/lottery/Games/Scratch_Offs/all.html"
+  status = 200
+  force = true
+
+# Per-game detail pages (for overall-odds extraction)
+[[redirects]]
+  from = "/proxy/details/*"
+  to = "https://www.texaslottery.com/export/sites/lottery/Games/Scratch_Offs/:splat"
+  status = 200
+  force = true
+
+# Retailer locator (POST form-encoded search)
+[[redirects]]
+  from = "/proxy/retailers"
+  to = "https://www.texaslottery.com/opencms/Games/Scratch_Offs/Retailer_Locator.jsp"
+  status = 200
+  force = true
+
+# OpenStreetMap reverse / forward geocoder (for the map)
+[[redirects]]
+  from = "/proxy/nominatim/*"
+  to = "https://nominatim.openstreetmap.org/:splat"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/service-worker.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
