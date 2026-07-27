@@ -2399,3 +2399,8 @@ body {
         line-height: 1.25;
     }
 }
+
+/* Header "Use My Location" — spinner while the device resolves a fix. */
+#useMyLocationBtn.locating i { animation: spin 1s linear infinite; }
+#useMyLocationBtn[disabled] { opacity: .6; cursor: progress; }
+@keyframes spin { to { transform: rotate(360deg); } }

@@ -19,6 +19,17 @@ class LotChanceApp {
     // meaningfully wrong.
     static STALE_DATA_MS = 24 * 60 * 60 * 1000;
 
+    // Candidates pulled from the bundle before the live stock check runs.
+    // Effectively "everything in radius": the bundle sorts sales-derived
+    // carriers first, and a popular game can have 600+ of them, so ANY cap
+    // here silently drops the stores the locator lists but the sales feed
+    // missed — which is the whole point of the check.
+    static MAX_STOCK_CHECK_CANDIDATES = 5000;
+
+    // ZIPs checked against the live locator per search. Only the ZIPs
+    // already on screen are queried, and each is cached for 10 minutes.
+    static MAX_STOCK_CHECK_ZIPS = 8;
+
     // Detail pages fetched per load to fill in missing overall odds. Normally
     // only newly launched games need this, so the cap is rarely reached.
     static MAX_ODDS_BACKFILL = 8;
@@ -120,6 +131,8 @@ class LotChanceApp {
     bindEvents() {
         // Location search
         document.getElementById('setLocationBtn').addEventListener('click', () => this.setLocation());
+        const locBtn = document.getElementById('useMyLocationBtn');
+        if (locBtn) locBtn.addEventListener('click', () => this.useMyLocationForHeader());
         document.getElementById('locationInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.setLocation();
         });
@@ -1349,6 +1362,58 @@ class LotChanceApp {
         return this.searchRetailersByLocation();
     }
 
+    /**
+     * Header "Use My Location": resolve the device position to a ZIP and set it
+     * as the app-wide location. Most people don't know their ZIP off the top of
+     * their head, and the whole retailer search keys off it.
+     */
+    async useMyLocationForHeader() {
+        const btn = document.getElementById('useMyLocationBtn');
+        if (!navigator.geolocation) {
+            this.showNotification(t('header.locateUnsupported'), 'error');
+            return;
+        }
+        if (btn) { btn.disabled = true; btn.classList.add('locating'); }
+        this.showNotification(t('header.locating'), 'info');
+
+        try {
+            const pos = await new Promise((resolve, reject) =>
+                navigator.geolocation.getCurrentPosition(resolve, reject,
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }));
+
+            const { latitude: lat, longitude: lng } = pos.coords;
+            this.nearMeLocation = { lat, lng };
+
+            let zip = '', city = '';
+            try {
+                const r = await fetch(`/proxy/nominatim/reverse?format=json&lat=${lat}&lon=${lng}`);
+                const d = await r.json();
+                zip = d?.address?.postcode || '';
+                city = d?.address?.city || d?.address?.town || d?.address?.village || '';
+            } catch (e) {
+                console.warn('[Location] reverse geocode failed:', e.message);
+            }
+
+            // A bare ZIP is what every downstream lookup wants; fall back to the
+            // city name, and to raw coordinates if the geocoder is unreachable.
+            const label = (zip.match(/\d{5}/) || [])[0] || city;
+            if (label) {
+                // setLocation() reads the input, persists it and raises its own
+                // toast, so feed it rather than duplicating that work.
+                const input = document.getElementById('locationInput');
+                if (input) input.value = label;
+                this.setLocation();
+            } else {
+                this.showNotification(t('header.locateFailed'), 'warning');
+            }
+        } catch (e) {
+            console.warn('[Location] geolocation failed:', e && e.message);
+            this.showNotification(t('header.locateFailed'), 'error');
+        } finally {
+            if (btn) { btn.disabled = false; btn.classList.remove('locating'); }
+        }
+    }
+
     useMyLocation() {
         if (!navigator.geolocation) {
             this.showNotification(t('retailer.geoUnsupported'), 'error');
@@ -1850,7 +1915,11 @@ class LotChanceApp {
                     lat, lng, zip,
                     gameId: this.selectedGame?.id || null,
                     radiusMiles: Math.max(radiusMiles * 2, 25),
-                    limit: LotChanceApp.MAX_RENDERED_RETAILERS
+                    // Deliberately far more than we display. The bundle sorts
+                    // sales-derived carriers first, so capping at 50 here would
+                    // discard a store the locator *does* list before the stock
+                    // check below ever got to promote it. Trim after that runs.
+                    limit: LotChanceApp.MAX_STOCK_CHECK_CANDIDATES
                 });
                 if (bundled.length) {
                     raw = bundled.map(r => ({
@@ -1863,6 +1932,7 @@ class LotChanceApp {
                     // rather than letting the dashboard date imply it.
                     const m = await window.RemoteData.getManifest();
                     this._bundleGeneratedAt = m && m.generatedAt ? new Date(m.generatedAt) : null;
+                    await this.applyLiveStockFlags(raw, this.selectedGame?.id);
                 }
             } catch (e) {
                 console.warn('[Retailers] bundle lookup failed, scraping live:', e.message);
@@ -1932,6 +2002,57 @@ class LotChanceApp {
 
         // 7. Notification
         this.notifyRetailerResult(sorted, radiusMiles, scrapeError, zip, city);
+    }
+
+    /**
+     * Overlay the locator's "currently stocked" answer onto bundle results.
+     *
+     * The bundle's carrier flag comes from monthly *sales*, which is not the
+     * same question as *stocks it*. A store holding packs it has not sold in
+     * the window records no sales and looks like a non-carrier — that is
+     * exactly how a Valero the Lottery lists for a game got demoted below 50
+     * other stores and effectively vanished from the list.
+     *
+     * The locator is the only source for what is actually on the shelf list,
+     * so it wins wherever the two disagree. Only the ZIPs already on screen
+     * are queried, and scraper.js caches each for 10 minutes.
+     */
+    async applyLiveStockFlags(retailers, gameId) {
+        if (!gameId || !window.LotteryScraper || !window.LotteryScraper.fetchRetailers) return;
+
+        // ZIPs of the physically nearest stores — not the carriers-first order,
+        // which would bias the check toward ZIPs we already know about and skip
+        // the neighbouring one holding unsold stock.
+        const nearestFirst = retailers.slice().sort((a, b) =>
+            (a.distanceNum ?? Infinity) - (b.distanceNum ?? Infinity));
+        const zips = [...new Set(
+            nearestFirst.map(r => (r.zip || '').trim()).filter(z => /^\d{5}$/.test(z))
+        )].slice(0, LotChanceApp.MAX_STOCK_CHECK_ZIPS);
+        if (!zips.length) return;
+
+        // The two feeds format names and addresses differently ("STE 101" vs
+        // "Ste 101", double spaces), so compare on alphanumerics only.
+        const norm = (s) => (s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
+        const key = (name, addr) => `${norm(name)}|${norm(addr)}`;
+
+        const stocked = new Set();
+        for (let i = 0; i < zips.length; i += 4) {
+            const lists = await Promise.all(zips.slice(i, i + 4).map(z =>
+                window.LotteryScraper.fetchRetailers({ zip: z, gameNumber: gameId, limit: 250 })
+                    .catch(() => [])
+            ));
+            for (const list of lists) for (const r of list) stocked.add(key(r.name, r.address));
+        }
+        if (!stocked.size) return;   // locator unreachable — keep sales-based flags
+
+        let recovered = 0;
+        for (const r of retailers) {
+            if (!stocked.has(key(r.name, r.address))) continue;
+            if (!r.carriesGame) recovered++;
+            r.carriesGame = true;
+            r.inStock = true;
+        }
+        console.log(`[Retailers] stock check over ${zips.length} ZIP(s): ${recovered} store(s) the sales feed had missed`);
     }
 
     /** Result toast, shared by the bundle and live-scrape paths. */
@@ -2431,8 +2552,9 @@ class LotChanceApp {
             // on the shelf now.
             const badge = r.carriesGame
                 ? `<span class="retailer-badge carries"><i class="fas fa-check-circle"></i> ${
-                    r.lastSold ? t('retailer.soldAsOf', { when: this.formatSaleMonth(r.lastSold) })
-                               : t('retailer.carries')}</span>`
+                    r.inStock ? t('retailer.inStock')
+                              : (r.lastSold ? t('retailer.soldAsOf', { when: this.formatSaleMonth(r.lastSold) })
+                                            : t('retailer.carries'))}</span>`
                 : `<span class="retailer-badge general"><i class="fas fa-store"></i> ${t('retailer.general')}</span>`;
 
             return `
