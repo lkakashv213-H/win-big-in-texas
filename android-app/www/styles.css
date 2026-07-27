@@ -2334,3 +2334,8 @@ body {
     color: var(--primary-light);
     transform: translateY(-2px);
 }
+
+/* Freshness of the underlying data, not of the last render. */
+.qs-value.data-fresh { color: var(--success, #22c55e); }
+.qs-value.data-stale { color: var(--warning, #f59e0b); font-weight: 700; }
+.qs-value.data-stale::after { content: ' \26A0'; }

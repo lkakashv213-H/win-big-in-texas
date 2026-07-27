@@ -14,6 +14,11 @@ class LotChanceApp {
     // How many retailers the map and list show at once.
     static MAX_RENDERED_RETAILERS = 50;
 
+    // Data older than this is called out in the UI. The scratch-off CSV moves
+    // daily, so a day-old copy is the point where 'prizes remaining' can be
+    // meaningfully wrong.
+    static STALE_DATA_MS = 24 * 60 * 60 * 1000;
+
     // Detail pages fetched per load to fill in missing overall odds. Normally
     // only newly launched games need this, so the cap is rarely reached.
     static MAX_ODDS_BACKFILL = 8;
@@ -77,6 +82,8 @@ class LotChanceApp {
         // goes stale the moment a game launches or closes.
         const cached = this.loadCachedGames();
         this.games = cached ? cached.games : [...TEXAS_SCRATCH_OFFS];
+        if (cached) this.setDataProvenance('cache', new Date(cached.at));
+        else this.setDataProvenance('bundled', null);
 
         // Try to fetch API updates (offline data is only ever a base)
         const success = await this.fetchFromAPI();
@@ -229,6 +236,7 @@ class LotChanceApp {
                 this.games = merged;
                 this.lastRefreshTime = new Date(result.meta?.fetchedAt || Date.now());
                 this.lastError = null;
+                this.setDataProvenance('live', this.lastRefreshTime);
 
                 console.log(`[API] Loaded ${result.data.length} live games (merged with ${TEXAS_SCRATCH_OFFS.length} static) → ${this.games.length} total`);
                 this.saveCachedGames(merged);
@@ -388,14 +396,51 @@ class LotChanceApp {
         }
     }
 
+    /**
+     * Show when the DATA was produced, not when the page last re-rendered.
+     * Those are different things: reloading the app against a three-day-old
+     * offline copy is not fresh data, and the old clock-only display made that
+     * look identical to a live fetch.
+     */
     updateLastRefreshTime() {
-        const now = this.lastRefreshTime;
-        const timeStr = now.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
+        const el = document.getElementById('lastUpdate');
+        if (!el) return;
+
+        const at = this.dataGeneratedAt;
+        if (!at) {
+            // The bundled data.js snapshot carries no machine-readable date, so
+            // there is nothing honest to show. Saying "unknown" beats printing
+            // a fabricated one — `new Date(null)` is epoch zero, not invalid,
+            // which is exactly how this rendered "20661 days ago".
+            el.textContent = t('dash.unknownDate');
+            el.classList.add('data-stale');
+            el.classList.remove('data-fresh');
+            el.title = t('dash.sourceLabel', { src: t('dash.source.' + (this.dataSource || 'bundled')) });
+            return;
+        }
+
+        const ageMs = Date.now() - at.getTime();
+        const stale = ageMs > LotChanceApp.STALE_DATA_MS;
+        const when = at.toLocaleString([], {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
-        document.getElementById('lastUpdate').textContent = timeStr;
+
+        el.textContent = `${when} · ${this.describeAge(at.getTime())}`;
+        el.classList.toggle('data-stale', stale);
+        el.classList.toggle('data-fresh', !stale);
+        el.title = t('dash.sourceLabel', { src: t('dash.source.' + (this.dataSource || 'live')) })
+            + (stale ? ` — ${t('dash.staleHint')}` : '');
+    }
+
+    /** Record where the current game data came from and when it was produced. */
+    setDataProvenance(source, generatedAt) {
+        this.dataSource = source;
+        // null/undefined must stay null: `new Date(null)` is a valid Date at
+        // epoch zero, so an isNaN check alone lets 1969 through.
+        const d = generatedAt == null ? null
+            : (generatedAt instanceof Date ? generatedAt : new Date(generatedAt));
+        this.dataGeneratedAt = (d && !isNaN(d.getTime())) ? d : null;
+        this.updateLastRefreshTime();
     }
 
     flashUpdate() {
@@ -1883,6 +1928,9 @@ class LotChanceApp {
         let raw = [];
         let scrapeError = null;
         let fromBundle = false;
+        // Cleared per search: a live-scraped list must not inherit the "data as
+        // of" stamp from a previous bundle-backed one.
+        this._bundleGeneratedAt = null;
 
         if (window.RemoteData && window.RemoteData.enabled()) {
             try {
@@ -1898,6 +1946,11 @@ class LotChanceApp {
                         distance: t('retailer.milesAway', { d: r.distanceNum.toFixed(1) })
                     }));
                     fromBundle = true;
+                    // Retailer data has its own refresh cadence (twice daily),
+                    // separate from the game/prize feed — so report it here
+                    // rather than letting the dashboard date imply it.
+                    const m = await window.RemoteData.getManifest();
+                    this._bundleGeneratedAt = m && m.generatedAt ? new Date(m.generatedAt) : null;
                 }
             } catch (e) {
                 console.warn('[Retailers] bundle lookup failed, scraping live:', e.message);
@@ -2392,6 +2445,10 @@ class LotChanceApp {
             </div>
             <div style="padding: 6px 12px; margin-bottom: 12px; font-size: 11px; color: var(--text-muted); line-height: 1.4;">
                 <i class="fas fa-info-circle"></i> ${t('retailer.nameNote')}
+                ${this._bundleGeneratedAt ? `<br><i class="fas fa-clock"></i> ${t('retailer.dataAsOf', {
+                    when: this._bundleGeneratedAt.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    age: this.describeAge(this._bundleGeneratedAt.getTime())
+                })}` : ''}
             </div>
         `;
 
